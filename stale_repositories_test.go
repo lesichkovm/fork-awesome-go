@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"testing"
 	"text/template"
 	"time"
 
@@ -35,8 +37,6 @@ const deadLinkMessage = " this repository might no longer exist! (status code >=
 const movedPermanently = " status code 301 received"
 const status302 = " status code 302 received"
 const archived = " repository has been archived"
-
-var delay time.Duration = 1
 
 //LIMIT specifies the max number of repositories that are added in a single run of the script
 var LIMIT = 10
@@ -140,10 +140,7 @@ func getAllFlaggedRepositories(client *http.Client, flaggedRepositories *map[str
 }
 func containsOpenIssue(link string, openIssues map[string]bool) bool {
 	_, ok := openIssues[link]
-	if ok {
-		return true
-	}
-	return false
+	return ok
 }
 func testRepoState(toRun bool, href string, client *http.Client, staleRepos *[]string) bool {
 	if toRun {
@@ -163,17 +160,17 @@ func testRepoState(toRun bool, href string, client *http.Client, staleRepos *[]s
 		}
 		defer resp.Body.Close()
 		json.NewDecoder(resp.Body).Decode(&repoResp)
-		if resp.StatusCode == 301 {
+		if resp.StatusCode == http.StatusMovedPermanently {
 			*staleRepos = append(*staleRepos, href+movedPermanently)
-			log.Printf("%s returned 301", href)
+			log.Printf("%s returned %d", href, resp.StatusCode)
 			isRepoAdded = true
 		}
-		if resp.StatusCode == 302 && !isRepoAdded {
+		if resp.StatusCode == http.StatusFound && !isRepoAdded {
 			*staleRepos = append(*staleRepos, href+status302)
-			log.Printf("%s returned 302", href)
+			log.Printf("%s returned %d", href, resp.StatusCode)
 			isRepoAdded = true
 		}
-		if resp.StatusCode >= 400 && !isRepoAdded {
+		if resp.StatusCode >= http.StatusBadRequest && !isRepoAdded {
 			*staleRepos = append(*staleRepos, href+deadLinkMessage)
 			log.Printf("%s might not exist!", href)
 			isRepoAdded = true
@@ -232,7 +229,7 @@ func testStaleRepository() {
 		tokenSource := &tokenSource{
 			AccessToken: oauth,
 		}
-		client = oauth2.NewClient(oauth2.NoContext, tokenSource)
+		client = oauth2.NewClient(context.Background(), tokenSource)
 	}
 	err := getAllFlaggedRepositories(client, &addressedRepositories)
 
@@ -270,6 +267,6 @@ func testStaleRepository() {
 	createIssue(staleRepos, client)
 }
 
-func main() {
+func TestStaleRepository(t *testing.T) {
 	testStaleRepository()
 }

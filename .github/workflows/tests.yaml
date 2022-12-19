@@ -1,8 +1,10 @@
-name: Check For Stale Repositories
+name: tests
+
 on:
-  workflow_dispatch:
-  schedule:
-    - cron: '0 0 * * 0'
+  push:
+    branches:
+      - 'main'
+  pull_request:
 
 permissions:
   contents: read  #  to fetch code (actions/checkout)
@@ -16,7 +18,5 @@ jobs:
     - uses: actions/checkout@v3
     - name: Get dependencies
       run: go get -v -t -d ./...
-    - name: run script
-      run: go test stale_repositories_test.go scripts.go
-      env:
-        OAUTH_TOKEN: ${{secrets.OAUTH_TOKEN}}
+    - name: Run tests
+      run: go test repo_test.go scripts.go
